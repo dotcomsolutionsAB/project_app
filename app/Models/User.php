@@ -32,6 +32,7 @@ class User extends Authenticatable
         'mp',
         'otp',
         'role',
+        'can_edit',
         'is_verified',
         'address_line_1',
         'address_line_2',

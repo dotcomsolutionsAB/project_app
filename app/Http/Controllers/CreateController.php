@@ -1125,11 +1125,11 @@ class CreateController extends Controller
                 if ($existing) {
                     $hadDuplicates = true;
 
-                    $existing->quantity = (int)$existing->quantity + (int)$item['quantity'];
-                    $existing->product_name = $item['product_name']; // optional sync
-                    $existing->save();
+                    // $existing->quantity = (int)$existing->quantity + (int)$item['quantity'];
+                    // $existing->product_name = $item['product_name']; // optional sync
+                    // $existing->save();
 
-                    $updatedItems[] = $existing->makeHidden(['id','created_at','updated_at']);
+                    // $updatedItems[] = $existing->makeHidden(['id','created_at','updated_at']);
                     continue;
                 }
 

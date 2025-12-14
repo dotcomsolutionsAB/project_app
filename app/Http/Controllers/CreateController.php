@@ -1051,42 +1051,135 @@ class CreateController extends Controller
         : response()->json(['message' => 'No changes detected.'], 304);
     }  
 
+    // public function stock_cart_store(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'items' => 'required|array|min:1',
+    //         'items.*.product_code' => 'required|string|exists:t_products,product_code',
+    //         'items.*.product_name' => 'required|string|exists:t_products,product_name',
+    //         'items.*.quantity' => 'required|integer|min:1',
+    //         'items.*.godown_id' => 'required|integer|exists:t_godown,id',
+    //         'items.*.type' => 'required|in:IN,OUT',
+    //         'items.*.size' => 'nullable',
+    //     ]);
+
+    //     $createdItems = [];
+    //     foreach ($validated['items'] as $item) {
+    //         $createdItem = StockCartModel::create([
+    //             'user_id' => Auth::id(),
+    //             'product_code' => $item['product_code'],
+    //             'product_name' => $item['product_name'],
+    //             'quantity' => $item['quantity'],
+    //             'godown_id' => $item['godown_id'],
+    //             'type' => $item['type'],
+    //             'size' => $item['size'] ?? null, // Optional size field
+    //         ]);
+    //         $createdItems[] = $createdItem->makeHidden(['id', 'created_at', 'updated_at']);
+    //     }
+
+    //     return !empty($createdItems)
+    //         ? response()->json([
+    //             'status' => true,
+    //             'message' => 'Stock cart items created successfully.',
+    //             'data' => $createdItems,
+    //         ], 200)
+    //         : response()->json([
+    //             'status' => false,
+    //             'message' => 'Failed to create stock cart items.',
+    //         ], 200);
+    // }
+
     public function stock_cart_store(Request $request)
     {
         $validated = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_code' => 'required|string|exists:t_products,product_code',
             'items.*.product_name' => 'required|string|exists:t_products,product_name',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.godown_id' => 'required|integer|exists:t_godown,id',
-            'items.*.type' => 'required|in:IN,OUT',
-            'items.*.size' => 'nullable',
+            'items.*.quantity'     => 'required|integer|min:1',
+            'items.*.godown_id'    => 'required|integer|exists:t_godown,id',
+            'items.*.type'         => 'required|in:IN,OUT',
+            'items.*.size'         => 'nullable',
         ]);
 
-        $createdItems = [];
-        foreach ($validated['items'] as $item) {
-            $createdItem = StockCartModel::create([
-                'user_id' => Auth::id(),
-                'product_code' => $item['product_code'],
-                'product_name' => $item['product_name'],
-                'quantity' => $item['quantity'],
-                'godown_id' => $item['godown_id'],
-                'type' => $item['type'],
-                'size' => $item['size'] ?? null, // Optional size field
-            ]);
-            $createdItems[] = $createdItem->makeHidden(['id', 'created_at', 'updated_at']);
-        }
+        $userId = Auth::id();
 
-        return !empty($createdItems)
-            ? response()->json([
-                'status' => true,
+        DB::beginTransaction();
+
+        try {
+            $createdItems = [];
+            $updatedItems = [];
+            $hadDuplicates = false;
+
+            foreach ($validated['items'] as $item) {
+
+                $where = [
+                    'user_id'      => $userId,
+                    'godown_id'    => $item['godown_id'],
+                    'product_code' => $item['product_code'],
+                    'type'         => $item['type'],
+                    'size'         => $item['size'] ?? null,
+                ];
+
+                $existing = StockCartModel::where($where)->lockForUpdate()->first();
+
+                if ($existing) {
+                    $hadDuplicates = true;
+
+                    $existing->quantity = (int)$existing->quantity + (int)$item['quantity'];
+                    $existing->product_name = $item['product_name']; // optional sync
+                    $existing->save();
+
+                    $updatedItems[] = $existing->makeHidden(['id','created_at','updated_at']);
+                    continue;
+                }
+
+                $created = StockCartModel::create([
+                    'user_id'      => $userId,
+                    'product_code' => $item['product_code'],
+                    'product_name' => $item['product_name'],
+                    'quantity'     => $item['quantity'],
+                    'godown_id'    => $item['godown_id'],
+                    'type'         => $item['type'],
+                    'size'         => $item['size'] ?? null,
+                ]);
+
+                $createdItems[] = $created->makeHidden(['id','created_at','updated_at']);
+            }
+
+            DB::commit();
+
+            // If duplicates found: quantities updated, but return error message as you wanted
+            if ($hadDuplicates) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Product already in cart.',
+                    'data'    => [
+                        'created' => $createdItems,
+                        'updated' => $updatedItems,
+                    ],
+                ], 200);
+            }
+
+            return response()->json([
+                'status'  => true,
                 'message' => 'Stock cart items created successfully.',
-                'data' => $createdItems,
-            ], 200)
-            : response()->json([
-                'status' => false,
-                'message' => 'Failed to create stock cart items.',
+                'data'    => $createdItems,
             ], 200);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            Log::error('Stock cart create failed: '.$e->getMessage(), [
+                'user_id' => $userId,
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to create stock cart items.',
+                'data'    => [],
+            ], 200);
+        }
     }
 
     public function createStockOrder(Request $request)

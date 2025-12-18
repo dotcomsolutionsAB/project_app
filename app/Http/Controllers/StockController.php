@@ -25,12 +25,17 @@ class StockController extends Controller
 
         // Fetch stock data with category, type, and purchase price using relationships
         $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
-        ->get()
-        ->sortBy(function ($item) {
-            $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARE' => 3]; // Define type priority
-            $typeRank = $typeOrder[$item->stock_product->type] ?? 4; // Default rank for unknown types
-            return [$typeRank, $item->stock_product->category]; // Sort first by type, then by category
-        });
+            ->get()
+            ->sortBy(function ($item) {
+                // Check if stock_product is not null
+                if ($item->stock_product) {
+                    $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARE' => 3]; // Define type priority
+                    $typeRank = $typeOrder[$item->stock_product->type] ?? 4; // Default rank for unknown types
+                    return [$typeRank, $item->stock_product->category]; // Sort first by type, then by category
+                }
+                // Return a default value if stock_product is null
+                return [4, 'Unknown']; // You can adjust this based on your needs
+            });
 
 
         // Organize stock by product and godown

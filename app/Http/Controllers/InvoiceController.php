@@ -1264,7 +1264,7 @@ class InvoiceController extends Controller
         }
 
         // Choose banner name based on series
-        $bannerName = ($series === 'MP') ? 'S2' : 'S1';
+        $bannerName = ($series === 'MP') ? 's2' : 's1';
 
         // Choose view (with/without price)
         if ($get_user && $get_user->role === 'user') {

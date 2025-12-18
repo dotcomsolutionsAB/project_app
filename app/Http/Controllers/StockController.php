@@ -26,9 +26,38 @@ class StockController extends Controller
         // 🔹 Validate 'type' to ensure it is either passed in the request or defaults to 'without_value'
         $type = $request->input('type', 'without_value'); // Set default to 'without_value' if not passed
 
-        // Fetch stock data with category, type, and purchase price using relationships
-        $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
-            ->get()
+        // Capture the series parameter
+        $series = $request->input('series', null); // Default to null if not provided
+
+        // // Apply series filter if 'series' value is 'MP'
+        // if ($series === 'MP') {
+        //     // Fetch only products with product_code starting with 'MP'
+        //     $stockData = $stockData->filter(function ($item) {
+        //         return strpos($item->product_code, 'MP') === 0;
+        //     });
+        // }
+
+        // // Fetch stock data with category, type, and purchase price using relationships
+        // $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
+        //     ->get()
+        //     ->sortBy(function ($item) {
+        //         // Check if stock_product is not null
+        //         if ($item->stock_product) {
+        //             $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARE' => 3]; // Define type priority
+        //             $typeRank = $typeOrder[$item->stock_product->type] ?? 4; // Default rank for unknown types
+        //             return [$typeRank, $item->stock_product->category]; // Sort first by type, then by category
+        //         }
+        //         // Return a default value if stock_product is null
+        //         return [4, 'Unknown']; // You can adjust this based on your needs
+        //     });
+
+        if ($series === 'MP') {
+            // Fetch only MP products whose product_code starts with 'MP'
+            $stockDataQuery->where('product_code', 'like', 'MP%');
+        }
+
+        // Fetch stock data
+        $stockData = $stockDataQuery->get()
             ->sortBy(function ($item) {
                 // Check if stock_product is not null
                 if ($item->stock_product) {
@@ -39,7 +68,6 @@ class StockController extends Controller
                 // Return a default value if stock_product is null
                 return [4, 'Unknown']; // You can adjust this based on your needs
             });
-
 
         // Organize stock by product and godown
         $stockSummary = [];
@@ -94,11 +122,14 @@ class StockController extends Controller
         // Define column widths
         $columnWidth = 60 / (count($allGodowns) + 2); // Distributes width evenly
 
+        // Change title based on series value
+        $reportTitle = ($series === 'MP') ? 'Stock Report Master Pro' : 'Stock Report';
+
         // HTML Content (Header Appears Only Once)
         $html = '<div style="text-align:center;">
-                    <h2>Stock Report</h2>
+                    <h2>' . $reportTitle . '</h2>
                     <p>Date: ' . Carbon::now('Asia/Kolkata')->format('d-m-Y h:i A') . '</p>
-                 </div>';
+                </div>';
 
         // Start table with fixed widths
         $html .= '<table border="1" width="100%" cellpadding="5" cellspacing="0" 
@@ -108,6 +139,13 @@ class StockController extends Controller
                             <th style="width: 5%;">#</th>
                             <th style="width: 7%;">Part No</th>
                             <th style="width: 28%;">Product Name</th>';
+
+        if ($series === 'MP') {
+            // Add heading for 'MP' series products
+            $html .= '<div style="text-align:center; font-size: 18px; margin-top: 20px; font-weight: bold;">
+                        Stock Report Master Pro
+                    </div>';
+        }
         
         foreach ($allGodowns as $godown) {
             $html .= "<th style='width: {$columnWidth}%;'>{$godown}</th>";
@@ -212,8 +250,5 @@ class StockController extends Controller
         
         return $remainingDigits . ',' . $lastThreeDigits . $decimalPart;
     }
-
 }
-
-
 ?>

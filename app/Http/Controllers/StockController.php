@@ -14,7 +14,14 @@ class StockController extends Controller
     public function generateStockReport(Request $request)
     {
 
-        $type = $request->type;
+        // $type = $request->type;
+        // 🔹 Validate 'type' to ensure it is either passed in the request or defaults to 'without_value'
+        $type = $request->input('type', 'without_value'); // Set default to 'without_value' if not passed
+
+        // If 'type' is required, you can also validate the presence of the type
+        $request->validate([
+            'type' => 'required|in:with_value,without_value',  // Only allow 'with_value' or 'without_value'
+        ]);
 
         // Fetch stock data with category, type, and purchase price using relationships
         $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])

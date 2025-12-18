@@ -9,6 +9,9 @@ use App\Models\GodownModel;
 use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
 
+ini_set('memory_limit', '512M'); // Adjust as needed
+set_time_limit(300); // Increase timeout to 5 minutes or as needed
+
 class StockController extends Controller
 {
     public function generateStockReport(Request $request)

@@ -50,6 +50,9 @@ class StockController extends Controller
         //         // Return a default value if stock_product is null
         //         return [4, 'Unknown']; // You can adjust this based on your needs
         //     });
+        
+        // Initialize the stock data query
+            $stockDataQuery = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name']);
 
         if ($series === 'MP') {
             // Fetch only MP products whose product_code starts with 'MP'

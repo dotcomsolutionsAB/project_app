@@ -27,7 +27,7 @@ class StockController extends Controller
         $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
         ->get()
         ->sortBy(function ($item) {
-            $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARES' => 3]; // Define type priority
+            $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARE' => 3]; // Define type priority
             $typeRank = $typeOrder[$item->stock_product->type] ?? 4; // Default rank for unknown types
             return [$typeRank, $item->stock_product->category]; // Sort first by type, then by category
         });

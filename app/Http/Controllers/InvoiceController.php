@@ -1268,12 +1268,12 @@ class InvoiceController extends Controller
 
         // Choose view (with/without price)
         if ($get_user && $get_user->role === 'user') {
-            $html = view('price_list_user', compact('get_product_details', 'user_name'))->render();
+            $html = view('price_list_user', compact('get_product_details', 'user_name', 'bannerName'))->render();
         } else {
             if ($type === 'without_price') {
-                $html = view('price_list_user', compact('get_product_details', 'user_name'))->render();
+                $html = view('price_list_user', compact('get_product_details', 'user_name', 'bannerName'))->render();
             } else {
-                $html = view('price_list', compact('get_product_details', 'user_name'))->render();
+                $html = view('price_list', compact('get_product_details', 'user_name', 'bannerName'))->render();
             }
         }
 

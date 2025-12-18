@@ -69,7 +69,7 @@
     <!-- Title Box -->
 
     <div class="header">
-        <img src="{{ asset('storage/uploads/s1.jpg') }}" alt="Logo" width="100%">
+        <img src="{{ asset('storage/uploads/' . $bannerName . '.jpg') }}" alt="Logo" width="100%">
     </div>
 
     <!-- Table for the Items -->

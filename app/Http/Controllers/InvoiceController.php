@@ -1172,6 +1172,8 @@ class InvoiceController extends Controller
         $categoryParam = trim((string) $request->input('category', '')); // e.g., "3,7,12"
         $search_text   = $request->input('search_text');
         $type          = $request->input('type');
+        // Capture the series parameter
+        $series = $request->input('series');
 
         // Resolve category names from comma-separated IDs (also supports names if provided)
         $categoryNames = collect();
@@ -1231,6 +1233,10 @@ class InvoiceController extends Controller
             ->whereNotNull('product_image')
             ->where('product_image', '!=', '')
             ->orderBy('id');
+        // Apply series filter if 'series' value is 'MP'
+        if ($series === 'MP') {
+            $query->where('product_code', 'like', 'MP%');
+        }
 
         // Category filter (by names, since products.category holds the name)
         if ($categoryNames->isNotEmpty()) {
@@ -1256,6 +1262,9 @@ class InvoiceController extends Controller
         if ($get_product_details->isEmpty()) {
             return response()->json(['message' => 'No products found.'], 200);
         }
+
+        // Choose banner name based on series
+        $bannerName = ($series === 'MP') ? 'S2' : 'S1';
 
         // Choose view (with/without price)
         if ($get_user && $get_user->role === 'user') {

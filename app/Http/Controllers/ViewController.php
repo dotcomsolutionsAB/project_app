@@ -544,10 +544,24 @@ class ViewController extends Controller
         // ====== END SS / MP SERIES RULES ======
 
         // Apply filters
+        // if ($search) {
+        //     $query->where(function ($q) use ($search) {
+        //         $q->where('product_name', 'like', "%{$search}%")
+        //           ->orWhere('product_code', 'like', "%{$search}%");
+        //     });
+        // }
+
+        // Tokenized search logic
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('product_name', 'like', "%{$search}%")
-                  ->orWhere('product_code', 'like', "%{$search}%");
+            $tokens = preg_split('/[\s\.\-\,]+/', mb_strtolower($search)); // Split search query into tokens
+            $query->where(function ($q) use ($tokens) {
+                foreach ($tokens as $token) {
+                    $q->where(function ($subQ) use ($token) {
+                        // Search for each token in both product_name and product_code
+                        $subQ->orWhereRaw('LOWER(product_name) LIKE ?', ["%{$token}%"])
+                            ->orWhereRaw('LOWER(product_code) LIKE ?', ["%{$token}%"]);
+                    });
+                }
             });
         }
         

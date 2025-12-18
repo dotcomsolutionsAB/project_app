@@ -96,8 +96,11 @@
     <!-- Title Box -->
 
     <div class="header">
-        <img src="{{ asset('storage/uploads/' . $bannerName . '.jpg') }}" alt="Logo" width="100%">
-
+        @if $bannerName == 's1'
+        <img src="{{ asset('storage/uploads/s1.jpg') }}" alt="Logo" width="100%">
+        @else
+        <img src="{{ asset('storage/uploads/s2.jpg') }}" alt="Logo" width="100%">
+        @endif
         <div class="overlay-text">
             ...
         </div>

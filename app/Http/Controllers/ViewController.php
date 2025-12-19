@@ -933,6 +933,10 @@ class ViewController extends Controller
 
     public function sub_categories($category = null)
     {
+        $plain = 'FqbrARWCmCvH4o3CFZXb4jJcBer4GOScYi1NPPKN815bef91';
+        $hash = hash('sha256', $plain);
+
+        dd($hash);
         // Convert the string of category IDs to an array, e.g., '1,2' -> [1, 2]
         $categoryIds = $category ? explode(',', $category) : [];
 

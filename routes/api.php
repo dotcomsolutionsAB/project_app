@@ -87,6 +87,7 @@ Route::prefix('admin')->middleware(['auth:sanctum', GetUserRole::class . ':admin
     Route::get('/subcategory/{category?}/{lang?}', [ViewController::class, 'lng_sub_categories']);
 
     Route::get('/lng_subcategory/{category?}', [ViewController::class, 'sub_categories']);
+    Route::get('/hash_key', [ViewController::class, 'hash_key']);
 
     Route::post('/add_order', [CreateController::class, 'orders']);
 

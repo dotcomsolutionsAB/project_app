@@ -931,12 +931,18 @@ class ViewController extends Controller
         }    
     }
 
-    public function sub_categories($category = null)
+    public function hash_key()
     {
         $plain = 'FqbrARWCmCvH4o3CFZXb4jJcBer4GOScYi1NPPKN815bef91';
         $hash = hash('sha256', $plain);
 
-        dd($hash);
+        return response()->json([
+            'hash_key' => $hash,
+        ], 200);
+    }
+    
+    public function sub_categories($category = null)
+    {
         // Convert the string of category IDs to an array, e.g., '1,2' -> [1, 2]
         $categoryIds = $category ? explode(',', $category) : [];
 

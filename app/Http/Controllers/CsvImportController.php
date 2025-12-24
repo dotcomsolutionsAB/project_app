@@ -304,8 +304,23 @@ class CsvImportController extends Controller
             $category = $record_csv['name'];
             $category_image = '';
 
-            $categoryNameSanitized = str_replace([' ', '/', '\\', ':', '*', '&'], '_', strtolower(str_replace(' & ', '_', $category)));
+            // $categoryNameSanitized = str_replace([' ', '/', '\\', ':', '*', '&'], '_', strtolower(str_replace(' & ', '_', $category)));
+            $categoryNameSanitized = strtolower($category);
 
+            // Replace & with 'and' (optional but cleaner)
+            $categoryNameSanitized = str_replace('&', 'and', $categoryNameSanitized);
+
+            // Replace all separators (-, /, \, spaces, etc.) with underscore
+            $categoryNameSanitized = preg_replace('/[\/\-\s]+/', '_', $categoryNameSanitized);
+
+            // Remove any remaining special characters
+            $categoryNameSanitized = preg_replace('/[^a-z0-9_]/', '', $categoryNameSanitized);
+
+            // Remove duplicate underscores
+            $categoryNameSanitized = preg_replace('/_+/', '_', $categoryNameSanitized);
+
+            // Trim underscores from start/end
+            $categoryNameSanitized = trim($categoryNameSanitized, '_');
 
             $imagePath = "/storage/uploads/category/{$categoryNameSanitized}.jpg";
             $category_imagePath_for_not_avaliable = "/storage/uploads/category/placeholder.jpg";

@@ -55,7 +55,14 @@ class CsvImportController extends Controller
             
             $product_csv = ProductModel::where('product_code', $record_csv['Product Code'])->first();
 
-            $purchasePrice_product = $record_csv['GST Base Price - temp'] !== '' ? $record_csv['GST Base Price - temp'] : 0;
+            $purchasePrice_product =
+            ($record_csv['GST Base Price - temp'] ?? '') !== ''
+                ? $record_csv['GST Base Price - temp']
+                : (
+                    ($record_csv['MP Purchase Price'] ?? '') !== ''
+                        ? $record_csv['MP Purchase Price']
+                        : 0
+                );
             $basicPrice_product = $record_csv['Basic Price'] !== '' ? $record_csv['Basic Price'] : 0;
             $gstPrice_prduct = $record_csv['GST Price'] !== '' ? $record_csv['GST Price'] : 0;
 			$basicPrice_product_special = $record_csv['Special Basic Price'] !== '' ? $record_csv['Special Basic Price'] : 0;

@@ -741,7 +741,7 @@ class InvoiceController extends Controller
             else {
 
                 foreach ($mobileNumbers as $mobileNumber) {
-                    if ($mobileNumber != '+919951263652') {
+                    if ($mobileNumber != '+919951263652' && $mobileNumber != '+917981553591') {
                         $whatsAppUtility->sendWhatsApp(
                             $mobileNumber,
                             $sendDocParam($adminTemplate, $adminBodyParams),

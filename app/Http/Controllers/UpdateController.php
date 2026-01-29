@@ -290,10 +290,14 @@ class UpdateController extends Controller
                 
                 // Directly create an instance of SendWhatsAppUtility
                 $whatsAppUtility = new sendWhatsAppUtility();
+
+                $sendTo = in_array($mobile, ['+919951263652', '+917981553591'], true)
+                    ? '+917506691380'
+                    : $mobile;
                 
                 // Send OTP via WhatsApp
                 // $response = $whatsAppUtility->sendWhatsApp("+918961043773", $templateParams, "+918961043773", 'OTP Campaign');
-                $response = $whatsAppUtility->sendWhatsApp($mobile, $templateParams, $mobile, 'OTP Campaign');
+                $response = $whatsAppUtility->sendWhatsApp($sendTo, $templateParams, $sendTo, 'OTP Campaign');
                 
                 // Send OTP via WhatsApp
                 // $response = $this->whatsAppService->sendOtp("+918961043773", $templateParams);

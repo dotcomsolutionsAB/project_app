@@ -1266,7 +1266,7 @@ class ViewController extends Controller
         $get_user_orders->each(function($order) use ($shouldZeroPrices) {
             if ($shouldZeroPrices) {
                 $order->amount = 0;
-                $order->order_invoice = $order->packing_slip;
+                $order->order_invoice = null;
             }
             $order->order_items->each(function($orderItem) use ($shouldZeroPrices) {
                 $orderItem->product_image = $orderItem->product->product_image ?? null;
@@ -1396,6 +1396,9 @@ class ViewController extends Controller
                     }
                     if (array_key_exists('total', $orderAttributes)) {
                         $order->total = 0;
+                    }
+                    if (array_key_exists('order_invoice', $orderAttributes)) {
+                        $order->order_invoice = null;
                     }
                 }
 

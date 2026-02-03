@@ -1321,6 +1321,27 @@ class ViewController extends Controller
         // ->get();
         
 
+        $authUser = Auth::User();
+        $shouldZeroPrices = $authUser && $authUser->mobile == "+919951263652";
+
+        if ($shouldZeroPrices) {
+            $get_items_for_orders->each(function ($item) {
+                $attributes = $item->getAttributes();
+                if (array_key_exists('rate', $attributes)) {
+                    $item->rate = 0;
+                }
+                if (array_key_exists('total', $attributes)) {
+                    $item->total = 0;
+                }
+                if (array_key_exists('amount', $attributes)) {
+                    $item->amount = 0;
+                }
+                if (array_key_exists('line_total', $attributes)) {
+                    $item->line_total = 0;
+                }
+            });
+        }
+
         if (isset($get_items_for_orders)) {
             return response()->json([
                 'message' => 'Fetch data successfully!',
@@ -1340,19 +1361,47 @@ class ViewController extends Controller
         try {
             // Attempt to fetch orders where the status is 'pending' and load the related user information
             $pendingOrders = OrderModel::where('status', 'pending')
-                ->with('user:id,name', 'order_items.product:id,product_code,product_image',) // Eager load the 'user' and 'order_items' relationships
+                ->with('user:id,name,mobile', 'order_items.product:id,product_code,product_image',) // Eager load the 'user' and 'order_items' relationships
                 ->orderByDesc('id')
                 ->get();
 
             // add product_image_url and hide the 'product' relation on each item
             $pendingOrders->transform(function($order) {
-                $order->order_items->transform(function($item) {
+                $shouldZeroPrices = $order->user && $order->user->mobile == "+919951263652";
+
+                if ($shouldZeroPrices) {
+                    $orderAttributes = $order->getAttributes();
+                    if (array_key_exists('amount', $orderAttributes)) {
+                        $order->amount = 0;
+                    }
+                    if (array_key_exists('total', $orderAttributes)) {
+                        $order->total = 0;
+                    }
+                }
+
+                $order->order_items->transform(function($item) use ($shouldZeroPrices) {
                     $item->product_image = $item->product
                         ? ($item->product->product_image)
                         : null;
 
                     // hide the raw product relation
                     $item->makeHidden('product');
+
+                    if ($shouldZeroPrices) {
+                        $attributes = $item->getAttributes();
+                        if (array_key_exists('rate', $attributes)) {
+                            $item->rate = 0;
+                        }
+                        if (array_key_exists('total', $attributes)) {
+                            $item->total = 0;
+                        }
+                        if (array_key_exists('amount', $attributes)) {
+                            $item->amount = 0;
+                        }
+                        if (array_key_exists('line_total', $attributes)) {
+                            $item->line_total = 0;
+                        }
+                    }
 
                     return $item;
                 });

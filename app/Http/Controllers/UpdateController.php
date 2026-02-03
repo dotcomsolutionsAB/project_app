@@ -1197,6 +1197,33 @@ class UpdateController extends Controller
         $editType       = strtolower($payload['edit_type'] ?? 'edit');
         $orderTypeLower = strtolower($payload['order_type']);
 
+        $authUser = Auth::user();
+        $shouldLockRates = $authUser && $authUser->mobile == "+919951263652";
+        $rateKey = function ($item) {
+            if (is_array($item)) {
+                $productCode = $item['product_code'] ?? '';
+                $size = $item['size'] ?? '';
+                $type = $item['type'] ?? '';
+            } else {
+                $productCode = $item->product_code ?? '';
+                $size = $item->size ?? '';
+                $type = $item->type ?? '';
+            }
+
+            return $productCode . '|' . $size . '|' . $type;
+        };
+
+        $existingRates = [];
+        if ($shouldLockRates) {
+            $existingItems = OrderItemsModel::where('order_id', $order->id)->get();
+            foreach ($existingItems as $existingItem) {
+                $key = $rateKey($existingItem);
+                if ($key !== '||') {
+                    $existingRates[$key] = (float)$existingItem->rate;
+                }
+            }
+        }
+
         // Parse cancel list (MERGE only) — expects INTERNAL ids comma-separated
         $cancelIds = [];
         if ($editType === 'merge' && !empty($payload['cancel_order_id'])) {
@@ -1274,6 +1301,14 @@ class UpdateController extends Controller
                 $orig = isset($item['orig_quantity']) ? (int)$item['orig_quantity'] : (int)$item['quantity'];
                 $qty  = (int)$item['quantity'];
                 $rate = (float)$item['rate'];
+
+                if ($shouldLockRates) {
+                    $key = $rateKey($item);
+                    if (array_key_exists($key, $existingRates)) {
+                        $rate = $existingRates[$key];
+                        $item['rate'] = $rate;
+                    }
+                }
 
                 $markedDel   = (bool)($item['markedForDeletion'] ?? false);
                 $markedSplit = (bool)($item['markedForSplit']   ?? false);

@@ -1365,9 +1365,11 @@ class ViewController extends Controller
                 ->orderByDesc('id')
                 ->get();
 
+            $authUser = Auth::User();
+            $shouldZeroPrices = $authUser && $authUser->mobile == "+919951263652";
+
             // add product_image_url and hide the 'product' relation on each item
-            $pendingOrders->transform(function($order) {
-                $shouldZeroPrices = $order->user && $order->user->mobile == "+919951263652";
+            $pendingOrders->transform(function($order) use ($shouldZeroPrices) {
 
                 if ($shouldZeroPrices) {
                     $orderAttributes = $order->getAttributes();

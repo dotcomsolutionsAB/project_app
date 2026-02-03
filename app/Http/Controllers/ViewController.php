@@ -1259,17 +1259,35 @@ class ViewController extends Controller
         ->orderBy('created_at', 'desc')
         ->get();
 
+        $authUser = Auth::User();
+        $shouldZeroPrices = $authUser && $authUser->mobile == "+919951263652";
+
         // Modify the order items to append the product image directly
-        $get_user_orders->each(function($order) {
-            $get_user = Auth::User();
-            if ($get_user->mobile == "+919951263652") {
+        $get_user_orders->each(function($order) use ($shouldZeroPrices) {
+            if ($shouldZeroPrices) {
                 $order->amount = 0;
                 $order->order_invoice = $order->packing_slip;
             }
-            $order->order_items->each(function($orderItem) {
+            $order->order_items->each(function($orderItem) use ($shouldZeroPrices) {
                 $orderItem->product_image = $orderItem->product->product_image ?? null;
                 // $orderItem->product_image = $orderItem->product->product_image ? url($orderItem->product->product_image) : null;
                 unset($orderItem->product); // Remove the product object after extracting the image
+
+                if ($shouldZeroPrices) {
+                    $attributes = $orderItem->getAttributes();
+                    if (array_key_exists('rate', $attributes)) {
+                        $orderItem->rate = 0;
+                    }
+                    if (array_key_exists('total', $attributes)) {
+                        $orderItem->total = 0;
+                    }
+                    if (array_key_exists('amount', $attributes)) {
+                        $orderItem->amount = 0;
+                    }
+                    if (array_key_exists('line_total', $attributes)) {
+                        $orderItem->line_total = 0;
+                    }
+                }
             });
         });
 

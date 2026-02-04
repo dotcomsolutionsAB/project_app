@@ -1214,12 +1214,68 @@ class UpdateController extends Controller
         };
 
         $existingRates = [];
+        $productPrices = collect();
         if ($shouldLockRates) {
             $existingItems = OrderItemsModel::where('order_id', $order->id)->get();
             foreach ($existingItems as $existingItem) {
                 $key = $rateKey($existingItem);
                 if ($key !== '||') {
                     $existingRates[$key] = (float)$existingItem->rate;
+                }
+            }
+
+            $orderUser = User::select('id', 'type', 'mobile')->where('id', $order->user_id)->first();
+            $productCodes = collect($payload['items'])->pluck('product_code')->filter()->unique()->values()->all();
+
+            if (!empty($productCodes)) {
+                if ($orderUser && $orderUser->mobile == "+919951263652") {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('0 as basic'),
+                        DB::raw('0 as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->mobile == "+919819084849") {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('0 as basic'),
+                        DB::raw('mp_price as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'outstation') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('outstation_basic as basic'),
+                        DB::raw('outstation_gst as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'zeroprice') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('0 as basic'),
+                        DB::raw('0 as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'special') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('special_basic as basic'),
+                        DB::raw('special_gst as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'aakhambati') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('0 as basic'),
+                        DB::raw('aakhambati_gst as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'guest') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('guest_price as basic'),
+                        DB::raw('0 as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } else {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        'basic',
+                        'gst'
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
                 }
             }
         }
@@ -1306,6 +1362,18 @@ class UpdateController extends Controller
                     $key = $rateKey($item);
                     if (array_key_exists($key, $existingRates)) {
                         $rate = $existingRates[$key];
+                        $item['rate'] = $rate;
+                    } else {
+                        $productCode = $item['product_code'] ?? null;
+                        $itemType = strtolower($item['type'] ?? $orderTypeLower);
+                        $priceRow = $productCode ? $productPrices->get($productCode) : null;
+                        if ($priceRow) {
+                            $rate = $itemType === 'gst'
+                                ? (float)($priceRow->gst ?? 0)
+                                : (float)($priceRow->basic ?? 0);
+                        } else {
+                            $rate = 0.0;
+                        }
                         $item['rate'] = $rate;
                     }
                 }

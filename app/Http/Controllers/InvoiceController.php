@@ -971,7 +971,7 @@ class InvoiceController extends Controller
                     ]
                 ],
             ];
-            if($logged_user_id != 75){
+            // if($logged_user_id != 75){
                 foreach ($mobileNumbers as $mobileNumber) 
                 {
                     if (in_array($mobileNumber, ['+919951263652', '+918961043773'], true))
@@ -986,7 +986,7 @@ class InvoiceController extends Controller
                         }
                     }
                 }
-            }
+            // }
         }else{
             $fileUrlWithTimestamp = $fileUrl . '?t=' . time();
             $templateParams = [
@@ -1032,7 +1032,7 @@ class InvoiceController extends Controller
                 ],
             ];
 
-            if($logged_user_id != 75){
+            // if($logged_user_id != 75){
                 foreach ($mobileNumbers as $mobileNumber) 
                 {
                     if (in_array($mobileNumber, ['+919951263652', '+918961043773'], true))
@@ -1047,7 +1047,7 @@ class InvoiceController extends Controller
                         }
                     }
                 }
-            }
+            // }
         }
     
         // return $mpdf->Output('invoice.pdf', 'I');

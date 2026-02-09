@@ -974,7 +974,7 @@ class InvoiceController extends Controller
             if($logged_user_id != 75){
                 foreach ($mobileNumbers as $mobileNumber) 
                 {
-                    if($mobileNumber == '+919951263652')
+                    if (in_array($mobileNumber, ['+919951263652', '+918961043773'], true))
                     {
                         // Send message for each number
                         $response = $whatsAppUtility->sendWhatsApp($mobileNumber, $templateParams, '', 'Admin Order Invoice');
@@ -1035,7 +1035,7 @@ class InvoiceController extends Controller
             if($logged_user_id != 75){
                 foreach ($mobileNumbers as $mobileNumber) 
                 {
-                    if($mobileNumber == '+919951263652')
+                    if (in_array($mobileNumber, ['+919951263652', '+918961043773'], true))
                     {
                         // Send message for each number
                         $response = $whatsAppUtility->sendWhatsApp($mobileNumber, $templateParams, '', 'Admin Order Invoice');

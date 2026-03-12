@@ -24,6 +24,7 @@ use App\Http\Controllers\InvoiceControllerZP;
 use App\Http\Middleware\GetUserRole;
 
 use App\Http\Controllers\ZohoController;
+use App\Http\Controllers\WhatsAppWebhookController;
 // Route::get('/user', function (Request $request) {
     //     return $request->user();
     // })->middleware('auth:sanctum');
@@ -36,6 +37,8 @@ use App\Http\Controllers\ZohoController;
  Route::get('/zoho/estimate', [ZohoController::class, 'createEstimate']);
  Route::get('/estimates/{estimateId}', [ZohoController::class, 'getEstimate']);
 
+ Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+ Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 
     
 Route::prefix('admin')->middleware(['auth:sanctum', GetUserRole::class . ':admin'])->group(function () {

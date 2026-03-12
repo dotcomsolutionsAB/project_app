@@ -2,15 +2,31 @@
 
 namespace App\Utils;
 
-use Illuminate\Support\Facades\Http;
+use App\Models\WhatsAppMessageLog;
 
 class sendWhatsAppUtility 
 {
     public static function sendWhatsApp($customer, $params, $media, $campaignName) 
     {
+        $templateName = is_array($params) && isset($params['name']) ? $params['name'] : null;
+        $to = is_string($customer) ? preg_replace('/[^0-9]/', '', $customer) : (string) $customer;
+
+        $log = WhatsAppMessageLog::create([
+            'to' => $to,
+            'template_name' => $templateName,
+            'status' => 'sent',
+            'sent_at' => now(),
+            'request_payload' => [
+                'to' => $customer,
+                'template' => $params,
+                'campaign_name' => $campaignName,
+            ],
+        ]);
+
+        $response = null;
+
         if (env('WHATSAPP_SERVICE_ON')) 
         {
-
             $content = array();
             $content['messaging_product'] = "whatsapp";
             $content['to'] = $customer;
@@ -21,10 +37,6 @@ class sendWhatsAppUtility
             $token = env('WHATSAPP_API_TOKEN');
 
             $curl = curl_init();
-
-            // Initialize $response to a default value
-            // changes due to server issue
-            $response = null;
 
             curl_setopt_array($curl, array(
             CURLOPT_URL => env('WHATSAPP_URL'),
@@ -44,8 +56,32 @@ class sendWhatsAppUtility
 
             $response = curl_exec($curl);
             curl_close($curl);
-
         }
+
+        $responsePayload = null;
+        $messageId = null;
+        $derivedStatus = 'sent';
+
+        if (is_string($response)) {
+            $decoded = json_decode($response, true);
+            if (is_array($decoded)) {
+                $responsePayload = $decoded;
+                if (!empty($decoded['messages'][0]['id'])) {
+                    $messageId = $decoded['messages'][0]['id'];
+                }
+                if (!empty($decoded['error'])) {
+                    $derivedStatus = 'failed';
+                }
+            }
+        }
+
+        $log->update([
+            'message_id' => $messageId,
+            'status' => $derivedStatus,
+            'response_payload' => $responsePayload,
+            'failed_at' => $derivedStatus === 'failed' ? now() : null,
+        ]);
+
         return $response;
     }
 }

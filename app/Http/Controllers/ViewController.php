@@ -543,6 +543,19 @@ class ViewController extends Controller
         }
         // ====== END SS / MP SERIES RULES ======
 
+        // SS products (not S* / MP*): only show if stock > 0 in t_stock_order_items (set SS_STOCK_FILTER_ENABLED=false in .env to turn off)
+        if (filter_var(env('SS_STOCK_FILTER_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereRaw("(
+                product_code LIKE 'S%' OR product_code LIKE 'MP%'
+                OR product_code IN (
+                    SELECT product_code FROM t_stock_order_items
+                    WHERE product_code NOT LIKE 'S%' AND product_code NOT LIKE 'MP%'
+                    GROUP BY product_code
+                    HAVING SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) > 0
+                )
+            )");
+        }
+
         // Apply filters
         // if ($search) {
         //     $query->where(function ($q) use ($search) {

@@ -585,9 +585,10 @@ class ViewController extends Controller
             $query->where('sub_category', $subCategory);
         }
 
-        // Apply pagination and get products
+        // Apply pagination and get products (MP series first, then SS / S / others)
         $total_products_count = $query->count();
-        $get_products = $query->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
+        $get_products = $query->orderByRaw("(product_code LIKE 'MP%') DESC")
+                                ->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
                                 ->orderBy('order_by')
                                 ->skip($offset)
                                 ->take($limit)

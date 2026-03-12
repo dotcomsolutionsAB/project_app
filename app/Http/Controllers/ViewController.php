@@ -543,8 +543,10 @@ class ViewController extends Controller
         }
         // ====== END SS / MP SERIES RULES ======
 
-        // SS products (not S* / MP*): only show if stock > 0 in t_stock_order_items (set SS_STOCK_FILTER_ENABLED=false in .env to turn off)
-        if (filter_var(env('SS_STOCK_FILTER_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
+        $isAdmin = $get_user->role !== 'user';
+
+        // SS products (not S* / MP*): only show if stock > 0 — for users only; admins see all (set SS_STOCK_FILTER_ENABLED=false in .env to turn off for users)
+        if (!$isAdmin && filter_var(env('SS_STOCK_FILTER_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
             $query->whereRaw("(
                 product_code LIKE 'S%' OR product_code LIKE 'MP%'
                 OR product_code IN (
@@ -585,17 +587,55 @@ class ViewController extends Controller
             $query->where('sub_category', $subCategory);
         }
 
-        // Apply pagination and get products (MP series first, then SS / S / others)
+        // Apply pagination and get products
         $total_products_count = $query->count();
-        $get_products = $query->orderByRaw("(product_code LIKE 'MP%') DESC")
+        if ($isAdmin) {
+            // Admin: MP first, then SS in_stock, then SS out_of_stock, then type/order_by
+            $get_products = $query->orderByRaw("
+                CASE
+                    WHEN t_products.product_code LIKE 'MP%' THEN 1
+                    WHEN t_products.product_code NOT LIKE 'S%' AND t_products.product_code NOT LIKE 'MP%' AND COALESCE((SELECT SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) FROM t_stock_order_items WHERE product_code = t_products.product_code), 0) > 0 THEN 2
+                    WHEN t_products.product_code NOT LIKE 'S%' AND t_products.product_code NOT LIKE 'MP%' THEN 3
+                    ELSE 4
+                END ASC
+            ")
                                 ->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
                                 ->orderBy('order_by')
                                 ->skip($offset)
                                 ->take($limit)
                                 ->get();
+        } else {
+            $get_products = $query->orderByRaw("(product_code LIKE 'MP%') DESC")
+                                ->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
+                                ->orderBy('order_by')
+                                ->skip($offset)
+                                ->take($limit)
+                                ->get();
+        }
 
         // Collect product codes from the current page
         $productCodes = $get_products->pluck('product_code')->all();
+
+        // Admin: SS products that are out of stock (for "**" prefix in display)
+        $ssOutOfStockCodes = [];
+        if ($isAdmin && !empty($productCodes)) {
+            $ssCodes = $get_products->pluck('product_code')->filter(function ($code) {
+                return !str_starts_with($code, 'S') && !str_starts_with($code, 'MP');
+            })->values()->all();
+            if (!empty($ssCodes)) {
+                $balances = StockOrderItemsModel::select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))
+                    ->whereIn('product_code', $ssCodes)
+                    ->groupBy('product_code')
+                    ->get()
+                    ->keyBy('product_code');
+                foreach ($ssCodes as $code) {
+                    $balance = $balances->get($code);
+                    if ($balance === null || (float) $balance->balance <= 0) {
+                        $ssOutOfStockCodes[] = $code;
+                    }
+                }
+            }
+        }
 
         // Preload special rates for this user for these products (product_code => rate)
         $specialRates = SpecialRateModel::where('user_id', $user_id)
@@ -604,7 +644,7 @@ class ViewController extends Controller
 
 
         // Process products for language and cart details
-        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates) {
+        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes) {
             
             // Set product name based on the selected language
             $product_name = $prd_rec->product_name;
@@ -612,6 +652,10 @@ class ViewController extends Controller
                 $product_name = $prd_rec->name_in_hindi;
             } elseif ($lang === 'tlg' && !empty($prd_rec->name_in_telugu)) {
                 $product_name = $prd_rec->name_in_telugu;
+            }
+            // Admin: prefix ** for SS products that are out of stock
+            if ($isAdmin && in_array($prd_rec->product_code, $ssOutOfStockCodes, true)) {
+                $product_name = '**' . $product_name;
             }
 
             // Extract video ID from video_link

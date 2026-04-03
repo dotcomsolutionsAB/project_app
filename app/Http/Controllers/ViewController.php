@@ -589,14 +589,18 @@ class ViewController extends Controller
         $total_products_count = (clone $query)->count();
 
         if ($isAdmin) {
+            // Alias joined product_code so WHERE/search clauses are not ambiguous with t_products.product_code
             $stockBalanceSub = DB::table('t_stock_order_items')
-                ->select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))
+                ->select(
+                    DB::raw('product_code AS stock_bal_product_code'),
+                    DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance")
+                )
                 ->groupBy('product_code');
 
             $get_products = (clone $query)
                 ->select('t_products.*')
                 ->leftJoinSub($stockBalanceSub, 'stock_bal', function ($join) {
-                    $join->on('t_products.product_code', '=', 'stock_bal.product_code');
+                    $join->on('t_products.product_code', '=', 'stock_bal.stock_bal_product_code');
                 })
                 ->orderByRaw("
                 CASE

@@ -370,13 +370,11 @@ class ViewController extends Controller
             $user_id = $request->input('user_id');
         }
 
-        // === Get user meta (type + new ss/mp flags) ===
-        $userMeta = User::select('type', 'ss', 'mp')->where('id', $user_id)->first();
-        // Get the user type
-		$user_type = User::select('type')->where('id', $user_id)->first();
-
-        // $admin_user_mobile = User::select('mobile')->where('id', $user_id)->first();
-        $admin_user_mobile = User::where('id', $user_id)->value('mobile');
+        // === Single query: user meta (type, ss, mp, mobile) ===
+        $targetUserRow = User::select('type', 'ss', 'mp', 'mobile')->where('id', $user_id)->first();
+        $userMeta = $targetUserRow;
+        $user_type = $targetUserRow;
+        $admin_user_mobile = $targetUserRow->mobile ?? null;
 
 		if ($get_user->mobile == "+919951263652") {
 
@@ -587,23 +585,32 @@ class ViewController extends Controller
             $query->where('sub_category', $subCategory);
         }
 
-        // Apply pagination and get products
-        $total_products_count = $query->count();
+        // Apply pagination and get products (count without admin stock join)
+        $total_products_count = (clone $query)->count();
+
         if ($isAdmin) {
-            // Admin: MP first, then SS in_stock, then SS out_of_stock, then type/order_by
-            $get_products = $query->orderByRaw("
+            $stockBalanceSub = DB::table('t_stock_order_items')
+                ->select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))
+                ->groupBy('product_code');
+
+            $get_products = (clone $query)
+                ->select('t_products.*')
+                ->leftJoinSub($stockBalanceSub, 'stock_bal', function ($join) {
+                    $join->on('t_products.product_code', '=', 'stock_bal.product_code');
+                })
+                ->orderByRaw("
                 CASE
                     WHEN t_products.product_code LIKE 'MP%' THEN 1
-                    WHEN t_products.product_code NOT LIKE 'S%' AND t_products.product_code NOT LIKE 'MP%' AND COALESCE((SELECT SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) FROM t_stock_order_items WHERE product_code = t_products.product_code), 0) > 0 THEN 2
+                    WHEN t_products.product_code NOT LIKE 'S%' AND t_products.product_code NOT LIKE 'MP%' AND COALESCE(stock_bal.balance, 0) > 0 THEN 2
                     WHEN t_products.product_code NOT LIKE 'S%' AND t_products.product_code NOT LIKE 'MP%' THEN 3
                     ELSE 4
                 END ASC
             ")
-                                ->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
-                                ->orderBy('order_by')
-                                ->skip($offset)
-                                ->take($limit)
-                                ->get();
+                ->orderByRaw("FIELD(t_products.type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
+                ->orderBy('t_products.order_by')
+                ->skip($offset)
+                ->take($limit)
+                ->get();
         } else {
             $get_products = $query->orderByRaw("(product_code LIKE 'MP%') DESC")
                                 ->orderByRaw("FIELD(type, 'MACHINE', 'SAFETY', 'ACCESSORIES', 'SPARE') ASC")
@@ -642,9 +649,32 @@ class ViewController extends Controller
             ->whereIn('product_code', $productCodes)
             ->pluck('rate', 'product_code');
 
+        $cartByCode = collect();
+        if (!empty($productCodes)) {
+            $cartByCode = CartModel::where('user_id', $user_id)
+                ->whereIn('product_code', $productCodes)
+                ->get()
+                ->keyBy('product_code');
+        }
+
+        $hasSparesByCode = [];
+        if (!empty($productCodes)) {
+            $codesWithSpares = DB::table('t_products as p1')
+                ->join('t_products as p2', function ($join) {
+                    $join->whereRaw('p2.product_code != p1.product_code')
+                        ->whereRaw('p2.machine_part_no LIKE CONCAT("%", p1.product_code, "%")');
+                })
+                ->whereIn('p1.product_code', $productCodes)
+                ->select('p1.product_code')
+                ->distinct()
+                ->pluck('p1.product_code');
+            foreach ($codesWithSpares as $c) {
+                $hasSparesByCode[$c] = true;
+            }
+        }
 
         // Process products for language and cart details
-        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes) {
+        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes, $cartByCode, $hasSparesByCode) {
             
             // Set product name based on the selected language
             $product_name = $prd_rec->product_name;
@@ -682,15 +712,9 @@ class ViewController extends Controller
             ? explode(',', $prd_rec->extra_images)
             : [];
 
-            // Check if the product is in the user's cart
-            $cart_item = CartModel::where('user_id', $user_id)
-                ->where('product_code', $prd_rec->product_code)
-                ->first();
+            $cart_item = $cartByCode->get($prd_rec->product_code);
 
-            // Check if the product code appears in other product's machine_part_no
-            $has_spares = ProductModel::where('machine_part_no', 'like', "%{$prd_rec->product_code}%")
-            ->where('product_code', '!=', $prd_rec->product_code) // Exclude the current product
-            ->exists();
+            $has_spares = isset($hasSparesByCode[$prd_rec->product_code]);
 
             // Return processed product data
             if($dropdown)

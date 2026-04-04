@@ -377,7 +377,10 @@ class ViewController extends Controller
         $user_type = $targetUserRow;
         $admin_user_mobile = $targetUserRow->mobile ?? null;
 
+        $purchasePricingForTarget = false;
+
         if ($get_user->role !== 'user' && $targetUserRow && stripos((string) ($targetUserRow->name ?? ''), 'PURCHASE') !== false) {
+            $purchasePricingForTarget = true;
             Log::info('lng_get_product: purchase pricing branch (admin, target name contains PURCHASE)', [
                 'auth_user_id' => $get_user->id,
                 'target_user_id' => $user_id,
@@ -618,8 +621,13 @@ class ViewController extends Controller
                 )
                 ->groupBy('product_code');
 
-            $get_products = (clone $query)
-                ->select('t_products.*')
+            // t_products.* overwrites computed basic/gst (e.g. purchase as basic/gst); keep explicit select for PURCHASE pricing
+            $adminFetch = clone $query;
+            if (!$purchasePricingForTarget) {
+                $adminFetch->select('t_products.*');
+            }
+
+            $get_products = $adminFetch
                 ->leftJoinSub($stockBalanceSub, 'stock_bal', function ($join) {
                     $join->on('t_products.product_code', '=', 'stock_bal.stock_bal_product_code');
                 })
@@ -699,7 +707,7 @@ class ViewController extends Controller
         }
 
         // Process products for language and cart details
-        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes, $cartByCode, $hasSparesByCode) {
+        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes, $cartByCode, $hasSparesByCode, $purchasePricingForTarget) {
             
             // Set product name based on the selected language
             $product_name = $prd_rec->product_name;
@@ -726,8 +734,8 @@ class ViewController extends Controller
                 }
             }
 
-            // If a special rate exists for this product for this client, override GST with that rate
-            if (isset($specialRates[$prd_rec->product_code])) {
+            // If a special rate exists for this product for this client, override GST with that rate (not for admin PURCHASE pricing)
+            if (!$purchasePricingForTarget && isset($specialRates[$prd_rec->product_code])) {
                 $prd_rec->gst = (float) $specialRates[$prd_rec->product_code];
             }
 

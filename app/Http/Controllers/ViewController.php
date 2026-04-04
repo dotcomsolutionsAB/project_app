@@ -37,6 +37,7 @@ use App\Models\SpecialRateModel;
 use App\Models\JobCardModel;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class ViewController extends Controller
 {
@@ -377,6 +378,11 @@ class ViewController extends Controller
         $admin_user_mobile = $targetUserRow->mobile ?? null;
 
         if ($get_user->role !== 'user' && $targetUserRow && stripos((string) ($targetUserRow->name ?? ''), 'PURCHASE') !== false) {
+            Log::info('lng_get_product: purchase pricing branch (admin, target name contains PURCHASE)', [
+                'auth_user_id' => $get_user->id,
+                'target_user_id' => $user_id,
+                'target_user_name' => $targetUserRow->name,
+            ]);
             $query = ProductModel::select(
                 'product_code',
                 'product_name',

@@ -370,13 +370,28 @@ class ViewController extends Controller
             $user_id = $request->input('user_id');
         }
 
-        // === Single query: user meta (type, ss, mp, mobile) ===
-        $targetUserRow = User::select('type', 'ss', 'mp', 'mobile')->where('id', $user_id)->first();
+        // === Single query: user meta (type, ss, mp, mobile, name) ===
+        $targetUserRow = User::select('type', 'ss', 'mp', 'mobile', 'name')->where('id', $user_id)->first();
         $userMeta = $targetUserRow;
         $user_type = $targetUserRow;
         $admin_user_mobile = $targetUserRow->mobile ?? null;
 
-		if ($get_user->mobile == "+919951263652") {
+        if ($get_user->role !== 'user' && $targetUserRow && stripos((string) ($targetUserRow->name ?? ''), 'PURCHASE') !== false) {
+            $query = ProductModel::select(
+                'product_code',
+                'product_name',
+                'category',
+                'sub_category',
+                'product_image',
+                'extra_images',
+                'size',
+                DB::raw('purchase as basic'),
+                DB::raw('purchase as gst'),
+                'out_of_stock',
+                'yet_to_launch',
+                'video_link'
+            );
+        } else if ($get_user->mobile == "+919951263652") {
 
 
             // If user type is 'special', select special columns but alias them as 'basic' and 'gst'

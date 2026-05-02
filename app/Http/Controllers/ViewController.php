@@ -660,7 +660,7 @@ class ViewController extends Controller
         $ssOutOfStockCodes = [];
         if ($isAdmin && !empty($productCodes)) {
             $ssCodes = $get_products->pluck('product_code')->filter(function ($code) {
-                return !str_starts_with($code, 'S') && !str_starts_with($code, 'MP');
+                return !str_starts_with($code, 'S') && !str_starts_with($code, 'MP') && !str_starts_with($code, 'IPT');
             })->values()->all();
             if (!empty($ssCodes)) {
                 $balances = StockOrderItemsModel::select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))

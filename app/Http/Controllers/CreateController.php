@@ -1006,15 +1006,15 @@ class CreateController extends Controller
     public function uploadProductsImage(Request $request)
     {
         $request->validate([
-            'product_code' => 'required|integer|exists:t_products,product_code',
-            'product_image' => 'required|mimes:jpg'
+            'product_code' => 'required|string|max:191|exists:t_products,product_code',
+            'product_image' => 'required|file|mimes:jpeg,jpg|max:10240',
         ]);
 
         $productCode = $request->input('product_code');
         $file = $request->file('product_image');
 
         // Rename file to product_code.jpg
-        $filename = $productCode. '.jpg';
+        $filename = $productCode . '.jpg';
 
         // Define directories
         $productPath = public_path('storage/uploads/products');
@@ -1043,14 +1043,17 @@ class CreateController extends Controller
             return response()->json(['error' => 'Failed to upload the file: ' . $e->getMessage()], 500);
         }
 
-        $update_file_name = ProductModel::where('product_code', $request->input('product_code'))
-                                        ->update([
-                                            'product_image' => "/storage/uploads/products/{$filename}",
-                                        ]);
-        
-        return ($update_file_name == 1)
-        ? response()->json(['message' => 'New products file updated successfully!', 'data' => $update_file_name], 200)
-        : response()->json(['message' => 'No changes detected.'], 304);
+        $relativePath = "/storage/uploads/products/{$filename}";
+        $updated = ProductModel::where('product_code', $productCode)->update([
+            'product_image' => $relativePath,
+        ]);
+
+        return $updated >= 1
+            ? response()->json([
+                'message' => 'Product image updated successfully.',
+                'product_image' => $relativePath,
+            ], 200)
+            : response()->json(['message' => 'Product not found.'], 404);
     }  
 
     // public function stock_cart_store(Request $request)

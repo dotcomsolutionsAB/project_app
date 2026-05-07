@@ -27,6 +27,8 @@ use App\Http\Controllers\ZohoController;
 use App\Http\Controllers\WhatsAppWebhookController;
 
 use App\Http\Controllers\DashboardAnalyticsController;
+
+use App\Http\Controllers\AdminProductCatalogController;
 // Route::get('/user', function (Request $request) {
     //     return $request->user();
     // })->middleware('auth:sanctum');
@@ -267,4 +269,6 @@ Route::middleware(['auth:sanctum', GetUserRole::class . ':admin'])
     ->prefix('admin')
     ->group(function () {
         Route::get('/dashboard/analytics', [DashboardAnalyticsController::class, 'index']);
+        Route::post('/products/retrieve', [AdminProductCatalogController::class, 'list']);
+        Route::get('/products/meta', [AdminProductCatalogController::class, 'meta']);
     });

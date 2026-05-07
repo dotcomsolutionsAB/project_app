@@ -25,6 +25,8 @@ use App\Http\Middleware\GetUserRole;
 
 use App\Http\Controllers\ZohoController;
 use App\Http\Controllers\WhatsAppWebhookController;
+
+use App\Http\Controllers\DashboardAnalyticsController;
 // Route::get('/user', function (Request $request) {
     //     return $request->user();
     // })->middleware('auth:sanctum');
@@ -259,4 +261,10 @@ Route::middleware(['auth:sanctum', GetUserRole::class . ':admin'])
     ->prefix('admin')
     ->group(function () {
         Route::get('/dashboard/kpis', [ViewController::class, 'admin_dashboard_kpis']);
+    });
+
+Route::middleware(['auth:sanctum', GetUserRole::class . ':admin'])
+    ->prefix('admin')
+    ->group(function () {
+        Route::get('/dashboard/analytics', [DashboardAnalyticsController::class, 'index']);
     });

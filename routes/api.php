@@ -254,3 +254,9 @@ Route::get('/fetch_categories', [CsvImportController::class, 'importCategory']);
 Route::post('/login/{otp?}', [CreateController::class, 'login']);
 Route::post('/register_user', [CreateController::class, 'user']);
 Route::post('/get_otp', [UpdateController::class, 'generate_otp']);
+
+Route::middleware(['auth:sanctum', GetUserRole::class . ':admin'])
+    ->prefix('admin')
+    ->group(function () {
+        Route::get('/dashboard/kpis', [ViewController::class, 'admin_dashboard_kpis']);
+    });

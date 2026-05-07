@@ -1754,6 +1754,28 @@ class ViewController extends Controller
         }    
     }
 
+    /**
+     * Admin dashboard KPI counts (used by Ace Care web app).
+     */
+    public function admin_dashboard_kpis()
+    {
+        $data = [
+            'total_products' => ProductModel::count(),
+            'total_clients' => User::where('role', 'user')->count(),
+            'total_categories' => CategoryModel::count(),
+            'total_godowns' => GodownModel::count(),
+            'total_orders' => OrderModel::count(),
+            'pending_orders' => OrderModel::where('status', 'pending')->count(),
+            'completed_orders' => OrderModel::where('status', 'completed')->count(),
+            'cancelled_orders' => OrderModel::where('status', 'cancelled')->count(),
+        ];
+
+        return response()->json([
+            'message' => 'Dashboard KPIs fetched successfully.',
+            'data' => $data,
+        ], 200);
+    }
+
     public function return_order($orderId)
     {
         // \DB::enableQueryLog();

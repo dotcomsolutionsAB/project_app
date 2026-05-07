@@ -1054,7 +1054,137 @@ class CreateController extends Controller
                 'product_image' => $relativePath,
             ], 200)
             : response()->json(['message' => 'Product not found.'], 404);
-    }  
+    }
+
+    /**
+     * Bulk upload product images. Each file must be named {product_code}.jpg (or .jpeg).
+     * Files are stored under public/storage/uploads/products/ and DB product_image is updated.
+     */
+    public function uploadProductsImagesBulk(Request $request)
+    {
+        $request->validate([
+            'images' => 'required|array|min:1',
+            'images.*' => 'file|max:10240',
+        ]);
+
+        $files = $request->file('images', []);
+        if (! is_array($files)) {
+            $files = array_filter([$files]);
+        }
+
+        $productPath = public_path('storage/uploads/products');
+        $productPdfPath = public_path('storage/uploads/products_pdf');
+
+        if (! file_exists($productPath)) {
+            mkdir($productPath, 0755, true);
+        }
+        if (! file_exists($productPdfPath)) {
+            mkdir($productPdfPath, 0755, true);
+        }
+
+        $skippedDetails = [];
+        $skippedInvalidFile = 0;
+
+        // filename (stem) => last UploadedFile (JPEG only), after validation
+        $candidates = [];
+
+        foreach ($files as $file) {
+            if (! $file || ! $file->isValid()) {
+                $skippedInvalidFile++;
+                $skippedDetails[] = [
+                    'filename' => $file ? $file->getClientOriginalName() : '(unknown)',
+                    'reason' => 'invalid_upload',
+                ];
+                continue;
+            }
+
+            $original = $file->getClientOriginalName();
+            $ext = strtolower($file->getClientOriginalExtension());
+            if (! in_array($ext, ['jpg', 'jpeg'], true)) {
+                $skippedInvalidFile++;
+                $skippedDetails[] = [
+                    'filename' => $original,
+                    'reason' => 'invalid_extension',
+                ];
+                continue;
+            }
+
+            $mime = strtolower((string) $file->getMimeType());
+            if ($mime !== '' && ! in_array($mime, ['image/jpeg', 'image/jpg'], true)) {
+                $skippedInvalidFile++;
+                $skippedDetails[] = [
+                    'filename' => $original,
+                    'reason' => 'invalid_mime',
+                ];
+                continue;
+            }
+
+            $productCode = trim((string) pathinfo($original, PATHINFO_FILENAME));
+            if ($productCode === '') {
+                $skippedInvalidFile++;
+                $skippedDetails[] = [
+                    'filename' => $original,
+                    'reason' => 'empty_product_code',
+                ];
+                continue;
+            }
+
+            $candidates[$productCode] = $file;
+        }
+
+        $updated = 0;
+        $skippedNameMismatch = 0;
+        $updatedProductCodes = [];
+
+        foreach ($candidates as $productCode => $file) {
+            $exists = ProductModel::where('product_code', $productCode)->exists();
+            if (! $exists) {
+                $skippedNameMismatch++;
+                $skippedDetails[] = [
+                    'filename' => $file->getClientOriginalName(),
+                    'reason' => 'no_matching_product',
+                    'product_code' => $productCode,
+                ];
+                continue;
+            }
+
+            $filename = $productCode . '.jpg';
+
+            try {
+                $file->move($productPath, $filename);
+                copy($productPath . '/' . $filename, $productPdfPath . '/' . $filename);
+            } catch (\Exception $e) {
+                $skippedInvalidFile++;
+                $skippedDetails[] = [
+                    'filename' => $file->getClientOriginalName(),
+                    'reason' => 'save_failed',
+                    'product_code' => $productCode,
+                ];
+                Log::warning('uploadProductsImagesBulk save_failed', [
+                    'product_code' => $productCode,
+                    'error' => $e->getMessage(),
+                ]);
+                continue;
+            }
+
+            $relativePath = '/storage/uploads/products/' . $filename;
+            ProductModel::where('product_code', $productCode)->update([
+                'product_image' => $relativePath,
+            ]);
+
+            $updated++;
+            $updatedProductCodes[] = $productCode;
+        }
+
+        return response()->json([
+            'message' => 'Bulk image upload processed.',
+            'updated' => $updated,
+            'skipped_name_mismatch' => $skippedNameMismatch,
+            'skipped_invalid_file' => $skippedInvalidFile,
+            'updated_product_codes' => $updatedProductCodes,
+            'skipped_details' => $skippedDetails,
+        ], 200);
+    }
 
     // public function stock_cart_store(Request $request)
     // {

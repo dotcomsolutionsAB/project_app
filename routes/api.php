@@ -154,6 +154,8 @@ Route::prefix('admin')->middleware(['auth:sanctum', GetUserRole::class . ':admin
 
     Route::post('/upload_product', [CreateController::class, 'uploadProductsImage']);
 
+    Route::post('/upload_products_images_bulk', [CreateController::class, 'uploadProductsImagesBulk']);
+
     Route::post('/make_stock_cart', [CreateController::class, 'stock_cart_store']);
     Route::get('/view_stock_cart/{id?}', [ViewController::class, 'stock_cart_index']);
     Route::post('/update_stock_cart/{id}', [UpdateController::class, 'stock_cart_update']);

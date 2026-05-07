@@ -221,6 +221,7 @@ class CreateController extends Controller
                     return response()->json([
                         'success' => true,
                         'data' => [
+                            'id' => $user->id,
                             'token' => $token,
                             'name' => $user->name,
                             'role' => $user->role,
@@ -266,6 +267,7 @@ class CreateController extends Controller
                 return response()->json([
                     'success' => true,
                     'data' => [
+                        'id' => $user->id,
                         'token' => $token,
                         'name' => $user->name,
                         'role' => $user->role,

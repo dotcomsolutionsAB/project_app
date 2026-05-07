@@ -365,10 +365,12 @@ class ViewController extends Controller
             ]);
             
         } else {
-            $request->validate([
-                'user_id' => 'required',
-            ]);
+            // Admin/staff: optional user_id (client context). Default to authenticated user for SPA/catalog.
             $user_id = $request->input('user_id');
+            if ($user_id === null || $user_id === '') {
+                $user_id = $get_user->id;
+            }
+            $user_id = (int) $user_id;
         }
 
         // === Single query: user meta (type, ss, mp, mobile, name) ===
@@ -387,6 +389,7 @@ class ViewController extends Controller
                 'target_user_name' => $targetUserRow->name,
             ]);
             $query = ProductModel::select(
+                'id',
                 'product_code',
                 'product_name',
                 'category',
@@ -394,6 +397,14 @@ class ViewController extends Controller
                 'product_image',
                 'extra_images',
                 'size',
+                'brand',
+                'type',
+                'hsn',
+                'tax',
+                're_order_level',
+                'machine_part_no',
+                'created_at',
+                'updated_at',
                 DB::raw('purchase as basic'),
                 DB::raw('purchase as gst'),
                 'out_of_stock',
@@ -609,6 +620,20 @@ class ViewController extends Controller
             $query->where('sub_category', $subCategory);
         }
 
+        $brandFilter = $request->input('brand', null);
+        if ($brandFilter) {
+            $query->where('brand', $brandFilter);
+        }
+
+        if ($isAdmin && filter_var($request->input('missing_image', false), FILTER_VALIDATE_BOOLEAN)) {
+            $placeholderPath = '/storage/uploads/products/placeholder.jpg';
+            $query->where(function ($w) use ($placeholderPath) {
+                $w->whereNull('product_image')
+                    ->orWhere('product_image', '')
+                    ->orWhere('product_image', $placeholderPath);
+            });
+        }
+
         // Apply pagination and get products (count without admin stock join)
         $total_products_count = (clone $query)->count();
 
@@ -761,6 +786,7 @@ class ViewController extends Controller
             }else{
                 return [
                     // 'SKU' => $prd_rec->SKU,
+                    'id' => $prd_rec->id ?? null,
                     'product_code' => $prd_rec->product_code,
                     'product_name' => $product_name,
                     'category' => $prd_rec->category,
@@ -768,6 +794,14 @@ class ViewController extends Controller
                     'product_image' => $prd_rec->product_image,
                     'extra_images' => $prd_rec->extra_images,
                     'size' => $prd_rec->size,
+                    'brand' => $prd_rec->brand ?? null,
+                    'type' => $prd_rec->type ?? null,
+                    'hsn' => $prd_rec->hsn ?? null,
+                    'tax' => $prd_rec->tax ?? null,
+                    're_order_level' => $prd_rec->re_order_level ?? null,
+                    'machine_part_no' => $prd_rec->machine_part_no ?? null,
+                    'created_at' => $prd_rec->created_at ? $prd_rec->created_at->toIso8601String() : '',
+                    'updated_at' => $prd_rec->updated_at ? $prd_rec->updated_at->toIso8601String() : '',
                     'basic' => $prd_rec->basic,
                     'gst' => $prd_rec->gst,
                     'out_of_stock' => $prd_rec->out_of_stock,
@@ -778,7 +812,7 @@ class ViewController extends Controller
                     'cart_quantity' => $cart_item->quantity ?? null,
                     'cart_type' => $cart_item->type ?? null,
                     'cart_remarks' => $cart_item->remarks ?? null,
-                    
+
                 ];
             }
         });
@@ -789,13 +823,13 @@ class ViewController extends Controller
             $show_basic = true;
         }
 
-        // Return response based on the result
-        return $processed_prd_lang_rec->isEmpty()
-        ? response()->json(['Failed to fetch data!'], 404)
-        : response()->json(['message' => 'Fetch data successfully!',
-                'show_basic' => $show_basic,
-                'data' => $processed_prd_lang_rec,
-                'count' => $total_products_count], 200);
+        // Return response (empty page is still 200 so clients can paginate)
+        return response()->json([
+            'message' => 'Fetch data successfully!',
+            'show_basic' => $show_basic,
+            'data' => $processed_prd_lang_rec,
+            'count' => $total_products_count,
+        ], 200);
     }
 
     public function getLatestUpdate($platform)

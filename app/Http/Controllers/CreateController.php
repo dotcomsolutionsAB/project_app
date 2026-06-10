@@ -20,6 +20,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceControllerZP;
 use Illuminate\Support\Facades\Auth;
 use App\Utils\sendWhatsAppUtility;
+use App\Utils\CartPricingUtility;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
@@ -816,18 +817,26 @@ class CreateController extends Controller
         {
             $request->merge(['user_id' => $get_user->id]);
         }
+
+        $cartUserId = (int) $request->input('user_id');
+        $quantity = $request->input('quantity');
+        $rate = CartPricingUtility::resolveRate(
+            $cartUserId,
+            (string) $request->input('product_code'),
+            $request->input('rate', 0)
+        );
     
             $create_cart = CartModel::updateOrCreate(
 				[
-					'user_id' => $request->input('user_id'),
+					'user_id' => $cartUserId,
 					'product_code' => $request->input('product_code'),
 					'size' => $request->input('size'),
 				], 
 				[
 					'product_name' => $request->input('product_name'),
-					'rate' => $request->input('rate'),
-					'quantity' => $request->input('quantity'),
-					'amount' => ($request->input('rate')) * ($request->input('quantity')),
+					'rate' => $rate,
+					'quantity' => $quantity,
+					'amount' => $rate * $quantity,
 					'type' => $request->input('type'),
 					'remarks' => $request->input('remarks'),
                     'size' => $request->input('size'),

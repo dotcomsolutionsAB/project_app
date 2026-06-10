@@ -18,6 +18,7 @@ use App\Models\LogsModel;
 use Illuminate\Validation\Rule;
 use App\Models\SpecialRateModel;
 use App\Models\JobCardModel;
+use App\Utils\CartPricingUtility;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\WishlistController;
 use App\Utils\sendWhatsAppUtility;
@@ -447,6 +448,7 @@ class UpdateController extends Controller
     public function cart(Request $request, $id)
     {
         $get_user = Auth::User();
+        $cartItem = CartModel::find($id);
         
         if($get_user->role == 'admin')
         {
@@ -459,14 +461,22 @@ class UpdateController extends Controller
                 // 'amount' => 'required',
                 'type' => 'required',
             ]);
+
+            $cartUserId = (int) $request->input('user_id');
+            $quantity = $request->input('quantity');
+            $rate = CartPricingUtility::resolveRate(
+                $cartUserId,
+                (string) $request->input('product_code'),
+                $request->input('rate')
+            );
     
             $update_cart = CartModel::where('id', $id)
             ->update([
                 // 'products_id' => $request->input('products_id'),
                 'product_code' => $request->input('product_code'),
-                'quantity' => $request->input('quantity'),
-                'rate' => $request->input('rate'),
-                'amount' => ($request->input('rate')) * ($request->input('quantity')),
+                'quantity' => $quantity,
+                'rate' => $rate,
+                'amount' => $rate * $quantity,
                 'type' => $request->input('type'),
                 'remarks' => $request->input('remarks'),
                 'size' => $request->input('size'),
@@ -481,13 +491,22 @@ class UpdateController extends Controller
                 // 'amount' => 'required',
                 'type' => 'required',
             ]);
+
+            $cartUserId = (int) ($cartItem->user_id ?? $get_user->id);
+            $quantity = $request->input('quantity');
+            $rate = CartPricingUtility::resolveRate(
+                $cartUserId,
+                (string) $request->input('product_code'),
+                $request->input('rate', $cartItem->rate ?? 0)
+            );
     
                 $update_cart = CartModel::where('id', $id)
                 ->update([
                     // 'products_id' => $request->input('products_id'),
                     'product_code' => $request->input('product_code'),
-                    'quantity' => $request->input('quantity'),
-                    'amount' => ($request->input('rate')) * ($request->input('quantity')),
+                    'quantity' => $quantity,
+                    'rate' => $rate,
+                    'amount' => $rate * $quantity,
                     'type' => $request->input('type'),
                     'remarks' => $request->input('remarks'),
                     'size' => $request->input('size'),

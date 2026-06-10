@@ -19,7 +19,8 @@ class StockController extends Controller
 
         // If 'type' is required, you can also validate the presence of the type
         $request->validate([
-            'type' => 'required|in:with_value,without_value',  // Only allow 'with_value' or 'without_value'
+            'type' => 'required|in:with_value,without_value',
+            'series' => 'nullable|in:SS,MP,ss,mp',
         ]);
 
         // $type = $request->type;
@@ -28,35 +29,19 @@ class StockController extends Controller
 
         // Capture the series parameter
         $series = $request->input('series', null); // Default to null if not provided
+        $seriesKey = $series !== null ? strtoupper(trim((string) $series)) : null;
 
-        // // Apply series filter if 'series' value is 'MP'
-        // if ($series === 'MP') {
-        //     // Fetch only products with product_code starting with 'MP'
-        //     $stockData = $stockData->filter(function ($item) {
-        //         return strpos($item->product_code, 'MP') === 0;
-        //     });
-        // }
-
-        // // Fetch stock data with category, type, and purchase price using relationships
-        // $stockData = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
-        //     ->get()
-        //     ->sortBy(function ($item) {
-        //         // Check if stock_product is not null
-        //         if ($item->stock_product) {
-        //             $typeOrder = ['MACHINE' => 1, 'ACCESSORIES' => 2, 'SPARE' => 3]; // Define type priority
-        //             $typeRank = $typeOrder[$item->stock_product->type] ?? 4; // Default rank for unknown types
-        //             return [$typeRank, $item->stock_product->category]; // Sort first by type, then by category
-        //         }
-        //         // Return a default value if stock_product is null
-        //         return [4, 'Unknown']; // You can adjust this based on your needs
-        //     });
-        
         // Initialize the stock data query
             $stockDataQuery = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name']);
 
-        if ($series === 'MP') {
+        if ($seriesKey === 'MP') {
             // Fetch only MP products whose product_code starts with 'MP'
             $stockDataQuery->where('product_code', 'like', 'MP%');
+        } elseif ($seriesKey === 'SS') {
+            // Super Steel products: exclude S*, MP*, and IPT* series
+            $stockDataQuery->where('product_code', 'not like', 'S%')
+                ->where('product_code', 'not like', 'MP%')
+                ->where('product_code', 'not like', 'IPT%');
         }
 
         // Fetch stock data
@@ -126,7 +111,11 @@ class StockController extends Controller
         $columnWidth = 60 / (count($allGodowns) + 2); // Distributes width evenly
 
         // Change title based on series value
-        $reportTitle = ($series === 'MP') ? 'Stock Report Master Pro' : 'Stock Report';
+        $reportTitle = match ($seriesKey) {
+            'MP' => 'Stock Report Master Pro',
+            'SS' => 'Stock Report Super Steel',
+            default => 'Stock Report',
+        };
 
         // HTML Content (Header Appears Only Once)
         $html = '<div style="text-align:center;">
@@ -143,7 +132,7 @@ class StockController extends Controller
                             <th style="width: 7%;">Part No</th>
                             <th style="width: 28%;">Product Name</th>';
 
-        if ($series === 'MP') {
+        if ($seriesKey === 'MP') {
             // Add heading for 'MP' series products
             $html .= '<div style="text-align:center; font-size: 18px; margin-top: 20px; font-weight: bold;">
                         Stock Report Master Pro

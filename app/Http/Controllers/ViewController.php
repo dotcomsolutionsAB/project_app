@@ -262,7 +262,7 @@ class ViewController extends Controller
                 'out_of_stock',
                 'yet_to_launch'
 			);
-		} else if ($user_type && $user_type->type == 'outstation') {
+        } else if ($user_type && $user_type->type == 'outstation') {
             // If user type is 'special', select special columns but alias them as 'basic' and 'gst'
             $query = ProductModel::select(
 				'product_code', 
@@ -275,6 +275,18 @@ class ViewController extends Controller
                 'out_of_stock',
                 'yet_to_launch'
 			);
+        } else if ($user_type && $user_type->type == 'supersteel') {
+            $query = ProductModel::select(
+                'product_code',
+                'product_name',
+                'category',
+                'sub_category',
+                'product_image',
+                DB::raw('purchase as basic'),
+                DB::raw('purchase as gst'),
+                'out_of_stock',
+                'yet_to_launch'
+            );
         } else {
 			// Default columns for non-special users
 			$query = ProductModel::select(
@@ -380,6 +392,7 @@ class ViewController extends Controller
         $admin_user_mobile = $targetUserRow->mobile ?? null;
 
         $purchasePricingForTarget = false;
+        $supersteelPricingForTarget = $user_type && $user_type->type === 'supersteel';
 
         if ($get_user->role !== 'user' && $targetUserRow && stripos((string) ($targetUserRow->name ?? ''), 'PURCHASE') !== false) {
             $purchasePricingForTarget = true;
@@ -516,7 +529,7 @@ class ViewController extends Controller
                 'yet_to_launch',
                 'video_link'
 			);
-		} 
+        } 
         else if ($user_type && $user_type->type == 'guest') {
 
 
@@ -536,6 +549,21 @@ class ViewController extends Controller
                 'video_link'
             );
 
+        } else if ($user_type && $user_type->type == 'supersteel') {
+            $query = ProductModel::select(
+                'product_code',
+                'product_name',
+                'category',
+                'sub_category',
+                'product_image',
+                'extra_images',
+                'size',
+                DB::raw('purchase as basic'),
+                DB::raw('purchase as gst'),
+                'out_of_stock',
+                'yet_to_launch',
+                'video_link'
+            );
         } else {
 			// Default columns for non-special users
 			$query = ProductModel::select(
@@ -646,9 +674,9 @@ class ViewController extends Controller
                 )
                 ->groupBy('product_code');
 
-            // t_products.* overwrites computed basic/gst (e.g. purchase as basic/gst); keep explicit select for PURCHASE pricing
+            // t_products.* overwrites computed basic/gst (e.g. purchase as basic/gst); keep explicit select for PURCHASE/supersteel pricing
             $adminFetch = clone $query;
-            if (!$purchasePricingForTarget) {
+            if (!$purchasePricingForTarget && !$supersteelPricingForTarget) {
                 $adminFetch->select('t_products.*');
             }
 
@@ -732,7 +760,7 @@ class ViewController extends Controller
         }
 
         // Process products for language and cart details
-        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes, $cartByCode, $hasSparesByCode, $purchasePricingForTarget) {
+        $processed_prd_lang_rec = $get_products->map(function ($prd_rec) use ($lang, $user_id, $dropdown, $specialRates, $isAdmin, $ssOutOfStockCodes, $cartByCode, $hasSparesByCode, $purchasePricingForTarget, $supersteelPricingForTarget) {
             
             // Set product name based on the selected language
             $product_name = $prd_rec->product_name;
@@ -759,8 +787,8 @@ class ViewController extends Controller
                 }
             }
 
-            // If a special rate exists for this product for this client, override GST with that rate (not for admin PURCHASE pricing)
-            if (!$purchasePricingForTarget && isset($specialRates[$prd_rec->product_code])) {
+            // If a special rate exists for this product for this client, override GST with that rate (not for admin PURCHASE/supersteel pricing)
+            if (!$purchasePricingForTarget && !$supersteelPricingForTarget && isset($specialRates[$prd_rec->product_code])) {
                 $prd_rec->gst = (float) $specialRates[$prd_rec->product_code];
             }
 
@@ -905,6 +933,11 @@ class ViewController extends Controller
                 DB::raw('guest_price as basic'), 
                 DB::raw('0 as gst')
             );
+        } elseif ($user_type && $user_type->type == 'supersteel') {
+            $productQuery->addSelect(
+                DB::raw('purchase as basic'),
+                DB::raw('purchase as gst')
+            );
         } else {
             $productQuery->addSelect('basic', 'gst');
         }
@@ -1001,6 +1034,11 @@ class ViewController extends Controller
             $productQuery->addSelect(
                 DB::raw('guest_price as basic'), 
                 DB::raw('0 as gst')
+            );
+        } elseif ($user_type && $user_type->type == 'supersteel') {
+            $productQuery->addSelect(
+                DB::raw('purchase as basic'),
+                DB::raw('purchase as gst')
             );
         } else {
             $productQuery->addSelect('basic', 'gst');
@@ -1307,6 +1345,7 @@ class ViewController extends Controller
             ['value' => 'outstation', 'name' => 'Outstation'],
             ['value' => 'zeroprice', 'name' => 'Zero Price'],
             ['value' => 'aakhambati', 'name' => 'AA Khambati Price'],
+            ['value' => 'supersteel', 'name' => 'Super Steel'],
         ];
     
         return $processed_rec_user->isEmpty()
@@ -1656,6 +1695,9 @@ class ViewController extends Controller
             } elseif ($user_type && $user_type->type == 'guest') {
                 $basic_column = DB::raw('guest_price as basic');
                 $gst_column = DB::raw('0 as gst');
+            } elseif ($user_type && $user_type->type == 'supersteel') {
+                $basic_column = DB::raw('purchase as basic');
+                $gst_column = DB::raw('purchase as gst');
             }
             
             $get_items_for_user = CartModel::where('t_cart.user_id', $id)
@@ -1700,6 +1742,9 @@ class ViewController extends Controller
             }elseif ($user_type && $user_type->type == 'guest') {
                 $basic_column = DB::raw('guest_price as basic');
                 $gst_column = DB::raw('0 as gst');
+            } elseif ($user_type && $user_type->type == 'supersteel') {
+                $basic_column = DB::raw('purchase as basic');
+                $gst_column = DB::raw('purchase as gst');
             }
             
             $get_items_for_user = CartModel::where('t_cart.user_id', $get_user->id)
@@ -2622,6 +2667,8 @@ class ViewController extends Controller
                             $original_rate = $product->guest_price ?? 0;
                         } elseif ($user_type == 'aakhambati') {
                             $original_rate = $product->aakhambati_gst ?? 0;
+                        } elseif ($user_type == 'supersteel') {
+                            $original_rate = $product->purchase ?? 0;
                         } else {
                             // Default for other users (if needed)
                             $original_rate = $product->gst ?? 0;

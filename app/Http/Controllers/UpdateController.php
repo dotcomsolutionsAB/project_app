@@ -1270,6 +1270,12 @@ class UpdateController extends Controller
                         DB::raw('guest_price as basic'),
                         DB::raw('0 as gst')
                     )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
+                } elseif ($orderUser && $orderUser->type == 'supersteel') {
+                    $productPrices = ProductModel::select(
+                        'product_code',
+                        DB::raw('purchase as basic'),
+                        DB::raw('purchase as gst')
+                    )->whereIn('product_code', $productCodes)->get()->keyBy('product_code');
                 } else {
                     $productPrices = ProductModel::select(
                         'product_code',

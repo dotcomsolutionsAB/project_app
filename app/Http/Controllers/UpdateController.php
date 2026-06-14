@@ -464,11 +464,8 @@ class UpdateController extends Controller
 
             $cartUserId = (int) $request->input('user_id');
             $quantity = $request->input('quantity');
-            $rate = CartPricingUtility::resolveRate(
-                $cartUserId,
-                (string) $request->input('product_code'),
-                $request->input('rate')
-            );
+            // Admin cart edits use the submitted rate (including manual overrides for user 533)
+            $rate = (float) $request->input('rate');
     
             $update_cart = CartModel::where('id', $id)
             ->update([

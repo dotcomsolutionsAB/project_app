@@ -38,6 +38,7 @@ use App\Models\JobCardModel;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Utils\SafetyStockUtility;
 
 class ViewController extends Controller
 {
@@ -667,12 +668,7 @@ class ViewController extends Controller
 
         if ($isAdmin) {
             // Alias joined product_code so WHERE/search clauses are not ambiguous with t_products.product_code
-            $stockBalanceSub = DB::table('t_stock_order_items')
-                ->select(
-                    DB::raw('product_code AS stock_bal_product_code'),
-                    DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance")
-                )
-                ->groupBy('product_code');
+            $stockBalanceSub = SafetyStockUtility::stockBalanceSubquery();
 
             // t_products.* overwrites computed basic/gst (e.g. purchase as basic/gst); keep explicit select for PURCHASE/supersteel pricing
             $adminFetch = clone $query;
@@ -716,7 +712,9 @@ class ViewController extends Controller
                 return !str_starts_with($code, 'S') && !str_starts_with($code, 'MP') && !str_starts_with($code, 'IPT');
             })->values()->all();
             if (!empty($ssCodes)) {
-                $balances = StockOrderItemsModel::select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))
+                $balances = SafetyStockUtility::applyEligibleItemsFilter(
+                    StockOrderItemsModel::select('product_code', DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) - SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS balance"))
+                )
                     ->whereIn('product_code', $ssCodes)
                     ->groupBy('product_code')
                     ->get()
@@ -2071,16 +2069,27 @@ class ViewController extends Controller
                 $godowns = GodownModel::select('id', 'name', 'description')->where('name', '!=', 'DIRECT DISPATCH')->get()->keyBy('id');
 
                 // Fetch stock order items for the product code
-                $stockOrderItems = StockOrderItemsModel::with('godown:name,id')
+                $stockOrderItemsQuery = StockOrderItemsModel::with('godown:name,id')
                     ->select('godown_id', 'type', 'quantity')
-                    ->where('product_code', $productCode)
-                    ->get();
+                    ->where('product_code', $productCode);
+
+                if (SafetyStockUtility::isSafetyProduct($productCode)) {
+                    $cutoff = SafetyStockUtility::cutoffDateString();
+                    if ($cutoff) {
+                        $stockOrderItemsQuery->whereHas('stockOrder', fn ($q) => $q->where('order_date', '>=', $cutoff));
+                    }
+                }
+
+                $stockOrderItems = $stockOrderItemsQuery->get();
 
                 // Fetch stock cart items for the product code
-                $stockCartItems = StockCartModel::with('godown:name,id')
+                $stockCartItemsQuery = StockCartModel::with('godown:name,id')
                     ->select('godown_id', 'type', 'quantity')
-                    ->where('product_code', $productCode)
-                    ->get();
+                    ->where('product_code', $productCode);
+
+                $stockCartItemsQuery = SafetyStockUtility::applySafetyCartCreatedFilter($stockCartItemsQuery, $productCode);
+
+                $stockCartItems = $stockCartItemsQuery->get();
 
                 // Prepare the final output
                 $result = $godowns->map(function ($godown) use ($stockOrderItems, $stockCartItems) {
@@ -2191,12 +2200,10 @@ class ViewController extends Controller
         $productCodes = $request->input('product_code') ? explode(',', $request->input('product_code')) : null;
         $godownId = $request->input('godown_id');
         $userId = $request->input('user_id');
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
 
-        // Default date range: last 3 months
-        $startDate = $startDate ?? now()->subMonths(3)->startOfDay();
-        $endDate = $endDate ?? now()->endOfDay();
+        // Default date range: last 3 months (S- products start from SAFETY_STOCK_DATE)
+        $startDate = SafetyStockUtility::effectiveHistoryStart($request->input('start_date'), $productCodes);
+        $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : now()->endOfDay();
 
         try {
             // Fetch stock orders with related models
@@ -2218,7 +2225,11 @@ class ViewController extends Controller
             }
 
             $result = $stockOrders->flatMap(function ($order) use ($productCodes, $godownId) {
-                return $order->items->filter(function ($item) use ($productCodes, $godownId) {
+                return $order->items->filter(function ($item) use ($productCodes, $godownId, $order) {
+                    if (!SafetyStockUtility::isOrderEligibleForSafetyProduct($item->product_code, $order->order_date)) {
+                        return false;
+                    }
+
                     return (!$productCodes || in_array($item->product_code, $productCodes)) &&
                         (!$godownId || $item->godown_id == $godownId);
                 })->map(function ($item) use ($order) {
@@ -2246,7 +2257,7 @@ class ViewController extends Controller
                     }
 
                     return [
-                        'date' => $order->created_at->format('Y-m-d'),
+                        'date' => Carbon::parse($order->order_date)->format('Y-m-d'),
                         'product_code' => $item->product_code,
                         'product_name' => $item->product_name ?? 'Unknown',
                         'godown_name' => $godownName,
@@ -2378,16 +2389,18 @@ class ViewController extends Controller
      */
     public function productPendingSummary(string $product_code)
     {
-        // 1) CURRENT STOCK = total IN - total OUT
-        $inQty = DB::table('t_stock_order_items')
-            ->where('product_code', $product_code)
-            ->where('type', 'IN')
-            ->sum('quantity');
+        // 1) CURRENT STOCK = total IN - total OUT (S- products from SAFETY_STOCK_DATE only)
+        $inQtyQuery = DB::table('t_stock_order_items as soi')
+            ->where('soi.product_code', $product_code)
+            ->where('soi.type', 'IN');
+        SafetyStockUtility::applyEligibleItemsToTableQuery($inQtyQuery, 'soi', 'safety_stock_orders_in');
+        $inQty = $inQtyQuery->sum('soi.quantity');
 
-        $outQty = DB::table('t_stock_order_items')
-            ->where('product_code', $product_code)
-            ->where('type', 'OUT')
-            ->sum('quantity');
+        $outQtyQuery = DB::table('t_stock_order_items as soi')
+            ->where('soi.product_code', $product_code)
+            ->where('soi.type', 'OUT');
+        SafetyStockUtility::applyEligibleItemsToTableQuery($outQtyQuery, 'soi', 'safety_stock_orders_out');
+        $outQty = $outQtyQuery->sum('soi.quantity');
 
         $currentStock = (int) $inQty - (int) $outQty;
 
@@ -2487,14 +2500,18 @@ class ViewController extends Controller
             // 4) Build current available stock per product per godown
             //    available = SUM(IN) - SUM(OUT) ; negative becomes 0
             //    Table assumed: t_stock_order_items (columns: product_code, godown_id, quantity, type IN/OUT)
-            $rawStocks = DB::table('t_stock_order_items as soi')
+            $rawStocksQuery = DB::table('t_stock_order_items as soi')
                 ->select([
                     'soi.product_code',
                     'soi.godown_id',
                     DB::raw("GREATEST(SUM(CASE WHEN soi.type = 'IN'  THEN soi.quantity ELSE 0 END) 
                                     - SUM(CASE WHEN soi.type = 'OUT' THEN soi.quantity ELSE 0 END), 0) as available")
                 ])
-                ->whereIn('soi.product_code', $productCodes)
+                ->whereIn('soi.product_code', $productCodes);
+
+            SafetyStockUtility::applyEligibleItemsToTableQuery($rawStocksQuery, 'soi', 'safety_stock_orders');
+
+            $rawStocks = $rawStocksQuery
                 ->groupBy('soi.product_code', 'soi.godown_id')
                 ->havingRaw('available > 0')
                 ->get();

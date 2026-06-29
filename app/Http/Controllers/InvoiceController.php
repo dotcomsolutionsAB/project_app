@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use App\Utils\sendWhatsAppUtility;
 use App\Models\StockOrderItemsModel;
+use App\Utils\SafetyStockUtility;
 use DB;
 use Carbon\Carbon;
 
@@ -298,11 +299,13 @@ class InvoiceController extends Controller
         $productCodes = $order_items->pluck('product_code')->unique()->toArray();
 
         // Fetch current stock for all product codes in one query
-        $stockMap = StockOrderItemsModel::select(
+        $stockMap = SafetyStockUtility::applyEligibleItemsFilter(
+            StockOrderItemsModel::select(
                 'product_code',
                 DB::raw("SUM(CASE WHEN type = 'IN' THEN quantity ELSE 0 END) AS total_in"),
                 DB::raw("SUM(CASE WHEN type = 'OUT' THEN quantity ELSE 0 END) AS total_out")
             )
+        )
             ->whereIn('product_code', $productCodes)
             ->groupBy('product_code')
             ->get()

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Mpdf\Mpdf;
 use App\Models\StockOrderItemsModel;
 use App\Models\GodownModel;
+use App\Utils\SafetyStockUtility;
 use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
 
@@ -32,7 +33,9 @@ class StockController extends Controller
         $seriesKey = $series !== null ? strtoupper(trim((string) $series)) : null;
 
         // Initialize the stock data query
-            $stockDataQuery = StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name']);
+            $stockDataQuery = SafetyStockUtility::applyEligibleItemsFilter(
+                StockOrderItemsModel::with(['stock_product:id,product_code,product_name,category,type,purchase', 'godown:id,name'])
+            );
 
         if ($seriesKey === 'MP') {
             // Fetch only MP products whose product_code starts with 'MP'
